@@ -1,0 +1,15 @@
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
+import api from './routes/api.js';
+const app=express();
+app.disable('x-powered-by');app.use(helmet());app.use(cors({origin:process.env.CLIENT_ORIGIN,methods:['GET','POST','PATCH','DELETE'],allowedHeaders:['Content-Type','Authorization']}));app.use(express.json({limit:'30kb'}));
+app.use('/api/auth',rateLimit({windowMs:15*60*1000,limit:40,standardHeaders:true,legacyHeaders:false}));
+app.get('/api/health',(_req,res)=>res.json({success:true,data:{status:'ok'},message:'CampusCare API is healthy'}));app.use('/api',api);
+app.use((err,_req,res,_next)=>{if(err.name==='ZodError')return res.status(400).json({success:false,data:err.issues,message:'Please check the submitted fields'});if(err.name==='CastError')return res.status(400).json({success:false,data:null,message:'Invalid record ID'});if(err.code===11000)return res.status(409).json({success:false,data:null,message:'A record with that value already exists'});console.error(err);return res.status(500).json({success:false,data:null,message:'Unexpected server error'});});
+const port=process.env.PORT||4000;
+if(!process.env.MONGO_URI||!process.env.JWT_SECRET||process.env.JWT_SECRET.length<32||!process.env.CLIENT_ORIGIN)throw new Error('MONGO_URI, a JWT_SECRET with at least 32 characters, and CLIENT_ORIGIN are required');
+await mongoose.connect(process.env.MONGO_URI);app.listen(port,()=>console.log(`CampusCare API listening on ${port}`));
